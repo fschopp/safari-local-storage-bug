@@ -1,34 +1,112 @@
 <!DOCTYPE html>
 <meta charset="utf-8">
-<title>Safari LocalStorage Bug</title>
-<h1>Safari LocalStorage Bug</h1>
+<title>
+  WebKit Bug 199929 – sessionStorage/localStorage disconnected from persistent
+  storage if accessed “too early”
+</title>
+<style>.ar {
+  color: red;
+}</style>
 
-<p>Clicking <a href="#" onclick="redirect()">here</a> will run:</p>
-<pre><code id="redirectCode"></code></pre>
+<h1>
+  <a href="https://bugs.webkit.org/show_bug.cgi?id=199928">
+    WebKit Bug 199929
+  </a>
+  – sessionStorage/localStorage disconnected from persistent storage if accessed
+  “too early”
+</h1>
 
-<p>TinyUrl will then redirect back to: <code id="redirectUrl"></code></p>
+<h2>Steps to Reproduce</h2>
+<ol>
+  <li>
+    Clicking <a href="#" onclick="redirect()">here</a> will run:
+    <pre><code id="redirectCode"></code></pre>
+  </li>
+  <li>TinyUrl will redirect back to: <code id="redirectUrl"></code></li>
+  <li>
+    This page will show the result of:
+    <pre><code id="getStmtAfterRedirect"></code></pre>
+  </li>
+</ol>
 
-<p>
-  After the redirect, the result shown at the end of the page should
-  <strong>not</strong> be <code>null</code>.
-</p>
-
-<hr/>
-
-<p>
-  Query parameter <code>prev-id</code> of current URL:
-  <code id="parameter"></code>
-</p>
-<p id="resultParagraph">
+<h2 id="actualResult" class="ar">Actual Result</h2>
+<p id="resultParagraph" class="ar">
   Result of <code id="getStmt"></code>: <code id="result"></code>
 </p>
 
+<h2>Expected Result</h2>
+<p>
+  After a click on the above link, the expected result is
+  <code>'Hello World'</code>. Safari 12.1.1 or Safari for iOS 12.3.1, however,
+  usually show <code>null</code> (unless using the workaround from below).
+</p>
+
+<h2>Observations</h2>
+<ol>
+  <li>Chrome or Firefox always show the expected result.</li>
+  <li>
+    It appears that the WebKit bug occurs if <code>sessionStorage</code> or
+    <code>localStorage</code> are accessed “too early.” In that case, they
+    appear disconnected from the persistent storage for the entire time the user
+    stays on the current page. This can also be seen in the Web Inspector.
+  </li>
+  <li>
+    In the current window/tab, navigate to a URL with some other origin (say,
+    <code><a href="https://bugs.webkit.org">https://bugs.webkit.org</a></code>
+    and then return to <code><a id="urlWithoutQuery"></a></code> (since this
+    URL has no query parameter, <code>sessionStorage</code> is not accessed
+    during page load). The Web Inspector will show that Session Storage is not
+    empty. In fact, the first click on the link at the top of this page (when
+    the Session Storage was not accessed too early) properly created an entry.
+  </li>
+</ol>
+
+<h2>Workaround</h2>
+<p>
+  A workaround is for the JavaScript code to wait before accessing the storage.
+  To verify, enter a wait time here (50ms or more should work) and click the
+  link at the top of the page again:
+</p>
+<p>
+  <label for="waitTimeMs">Wait time (ms):</label>
+  <input id="waitTimeMs" type="number" size="4" min="0" max="9999"/>
+</p>
+
 <script>
+  // Constants
+  const PAGE_URL = 'https://fschopp.github.io/safari-local-storage-bug/';
+  const TINY_URL = 'https://tinyurl.com/yyzpg3qw';
   const STORAGE_PREFIX = 'safari-local-storage-bug';
   const VALUE = 'Hello World!';
 
+  // Page-view constants
   const id = `${Date.now().toString()}`;
-  const tinyUrl = `https://tinyurl.com/yyzpg3qw?prev-id=${id}`;
+  const currentSearchParams = new URL(window.location.href).searchParams;
+  const prevId = currentSearchParams.get('prev-id');
+  const waitBeforeAccessMs = parseInt(currentSearchParams.get('wait'), 10);
+
+  // Mutable state
+  const redirectUrl = new URL(PAGE_URL);
+  redirectUrl.searchParams.set('prev-id', id);
+  const tinyUrl = new URL(TINY_URL);
+  tinyUrl.searchParams.set('prev-id', id);
+  let waitMs;
+
+  function onWaitTimeChanged() {
+    waitMs = parseInt(document.getElementById('waitTimeMs').value, 10);
+    if (Number.isNaN(waitMs)) {
+      redirectUrl.searchParams.delete('wait');
+      tinyUrl.searchParams.delete('wait');
+    } else {
+      redirectUrl.searchParams.set('wait', waitMs.toString());
+      tinyUrl.searchParams.set('wait', waitMs.toString());
+    }
+
+    document.getElementById('redirectCode').innerText =
+        `sessionStorage.setItem('${storageKeyForId(id)}', '${VALUE}')\n` +
+        `window.location.href = '${tinyUrl.toString()}'`;
+    document.getElementById('redirectUrl').innerText = redirectUrl.toString();
+  }
 
   function storageKeyForId(id) {
     return `${STORAGE_PREFIX}/${id}`;
@@ -36,28 +114,41 @@
 
   function redirect() {
     sessionStorage.setItem(storageKeyForId(id), VALUE);
-    window.location.href = tinyUrl;
+    window.location.href = tinyUrl.toString();
   }
 
-  document.getElementById('redirectCode').innerText =
-    `sessionStorage.setItem('${storageKeyForId(id)}', '${VALUE}')\n` +
-    `window.location.href = '${tinyUrl}'`;
-  const redirectUrl =
-    new URL('https://fschopp.github.io/safari-local-storage-bug/');
-  redirectUrl.searchParams.set('prev-id', id);
-  document.getElementById('redirectUrl').innerText = redirectUrl.toString();
-  const prevId = new URL(window.location.href).searchParams.get('prev-id');
-  document.getElementById('parameter').innerText = prevId === null
-    ? 'null'
-    : `'${prevId}'`;
-  if (prevId !== null) {
-    document.getElementById('getStmt').innerText =
-      `sessionStorage.getItem('${storageKeyForId(prevId)}')`;
+  function showResult() {
     const result = sessionStorage.getItem(storageKeyForId(prevId));
     document.getElementById('result').innerText = result === null
-      ? 'null'
-      : `'${result}'`;
-  } else {
-    document.getElementById('resultParagraph').style.display = 'none';
+        ? 'null'
+        : `'${result}'`;
   }
+
+  // Initialize UI
+  if (!Number.isNaN(waitBeforeAccessMs)) {
+    document.getElementById('waitTimeMs').value =
+        waitBeforeAccessMs.toString();
+  }
+  document.getElementById('urlWithoutQuery').innerText = PAGE_URL;
+  document.getElementById('urlWithoutQuery').href = PAGE_URL;
+  document.getElementById('getStmtAfterRedirect').innerText =
+      `sessionStorage.getItem('${storageKeyForId(id)}')`;
+  if (prevId !== null) {
+    document.getElementById('getStmt').innerText =
+        `sessionStorage.getItem('${storageKeyForId(prevId)}')`;
+    if (Number.isNaN(waitBeforeAccessMs)) {
+      showResult();
+    } else {
+      window.setTimeout(showResult, waitBeforeAccessMs);
+    }
+  } else {
+    for (const element of document.getElementsByClassName('ar')) {
+      element.style.display = 'none';
+    }
+  }
+
+  // React to user input
+  document.getElementById('waitTimeMs')
+      .addEventListener('input', onWaitTimeChanged);
+  onWaitTimeChanged();
 </script>
