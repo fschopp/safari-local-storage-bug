@@ -1,0 +1,7 @@
+# IntelliJ, Visual Studio Code, ...
+/.idea/
+/*.iml
+/.vscode/
+
+# macOS Finder
+.DS_Store

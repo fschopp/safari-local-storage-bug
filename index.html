@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>Safari LocalStorage Bug</title>
+<h1>Safari LocalStorage Bug</h1>
+
+<p>Clicking <a href="#" onclick="redirect()">here</a> will run:</p>
+<pre><code id="redirectCode"></code></pre>
+
+<p>TinyUrl will then redirect back to: <code id="redirectUrl"></code></p>
+
+<p>
+  After the redirect, the result shown at the end of the page should
+  <strong>not</strong> be <code>null</code>.
+</p>
+
+<hr/>
+
+<p>
+  Query parameter <code>prev-id</code> of current URL:
+  <code id="parameter"></code>
+</p>
+<p id="resultParagraph">
+  Result of <code id="getStmt"></code>: <code id="result"></code>
+</p>
+
+<script>
+  const STORAGE_PREFIX = 'safari-local-storage-bug';
+  const VALUE = 'Hello World!';
+
+  const id = `${Date.now().toString()}`;
+  const tinyUrl = `https://tinyurl.com/yyzpg3qw?prev-id=${id}`;
+
+  function storageKeyForId(id) {
+    return `${STORAGE_PREFIX}/${id}`;
+  }
+
+  function redirect() {
+    sessionStorage.setItem(storageKeyForId(id), VALUE);
+    window.location.href = tinyUrl;
+  }
+
+  document.getElementById('redirectCode').innerText =
+    `sessionStorage.setItem('${storageKeyForId(id)}', '${VALUE}')\n` +
+    `window.location.href = '${tinyUrl}'`;
+  const redirectUrl =
+    new URL('https://fschopp.github.io/safari-local-storage-bug/');
+  redirectUrl.searchParams.set('prev-id', id);
+  document.getElementById('redirectUrl').innerText = redirectUrl.toString();
+  const prevId = new URL(window.location.href).searchParams.get('prev-id');
+  document.getElementById('parameter').innerText = prevId === null
+    ? 'null'
+    : `'${prevId}'`;
+  if (prevId !== null) {
+    document.getElementById('getStmt').innerText =
+      `sessionStorage.getItem('${storageKeyForId(prevId)}')`;
+    const result = sessionStorage.getItem(storageKeyForId(prevId));
+    document.getElementById('result').innerText = result === null
+      ? 'null'
+      : `'${result}'`;
+  } else {
+    document.getElementById('resultParagraph').style.display = 'none';
+  }
+</script>
